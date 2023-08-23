@@ -21,7 +21,11 @@ import com.zwy.nas.request.SelectFileResponse
 import com.zwy.nas.request.reqPath
 import com.zwy.nas.task.UploadTask
 import com.zwy.nas.util.FileUtil
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -544,97 +548,87 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
             _uploadId.value = uploadFileBean.id
             _progress.value = 0
             val buffer = ByteArray(splitSize.toInt())
-            var bytesRead: Int = -1
+            var bytesRead: Int
             var chunkNumber = 1
-            var stopNum = 0
-            val mutex = Mutex()
             val totalSplit = kotlin.math.ceil(uploadFileBean.size.toDouble() / splitSize).toInt()
-            runBlocking(Dispatchers.IO) {
-                while (true) {
-                    if (chunkNumber in chunks) {
-                        inputStream.skip(splitSize)
-                    } else {
-                        bytesRead = inputStream.read(buffer)
-                        if (bytesRead < 0) {
-                            break
+            var f: UploadFileBean?
+            val scope = CoroutineScope(Dispatchers.IO)
+            val jobList = mutableListOf<Job>()
+            val maxJobSize = 10
+            while (true) {
+                if (chunkNumber in chunks) {
+                    inputStream.skip(splitSize)
+                    _progress.value = findProgress(chunkNumber, totalSplit)
+                    chunkNumber++
+                } else {
+                    bytesRead = inputStream.read(buffer)
+                    if (bytesRead < 0) {
+                        break
+                    }
+                    runBlocking(Dispatchers.IO) {
+                        f = database.UploadFileDao().findById(uploadFileBean.id)
+                    }
+                    if (f?.stop == 1) {
+                        Log.d(
+                            Common.MY_TAG,
+                            "upload: 文件已暂停 thread ${Thread.currentThread().name}"
+                        )
+                        runBlocking(Dispatchers.IO) {
+                            database.UploadFileDao().keepProgress(
+                                uploadFileBean.id,
+                                findProgress(chunkNumber, totalSplit)
+                            )
                         }
-                        val chunkNumberBody =
-                            RequestBody.create(
-                                MediaType.parse("text/plain"),
-                                chunkNumber.toString()
+                        jobList.forEach {
+                            it.cancel()
+                        }
+                    } else {
+                        runBlocking {
+                            Log.d(
+                                Common.MY_TAG,
+                                "upload2: jobList size ${jobList.size} maxJobSize $maxJobSize"
                             )
-                        val totalSizeBody =
-                            RequestBody.create(
-                                MediaType.parse("text/plain"),
-                                uploadFileBean.size.toString()
-                            )
-                        val totalChunksBody =
-                            RequestBody.create(MediaType.parse("text/plain"), totalSplit.toString())
-                        val filenameBody =
-                            RequestBody.create(MediaType.parse("text/plain"), uploadFileBean.name)
-                        val superIdBody =
-                            RequestBody.create(MediaType.parse("text/plain"), superId)
-                        val idBody =
-                            RequestBody.create(MediaType.parse("text/plain"), id)
-                        val requestBody = RequestBody.create(
-                            MediaType.parse("application/octet-stream"),
-                            buffer
-                        )
-                        val filePart = MultipartBody.Part.createFormData(
-                            "file",
-                            uploadFileBean.name,
-                            requestBody
-                        )
-                        val webIdBody = RequestBody.create(
-                            MediaType.parse(
-                                "text/plain"
-                            ), uploadFileBean.id.toString()
-                        )
-                        launch(Dispatchers.IO) {
-                            val f = database.UploadFileDao().findById(uploadFileBean.id)
-                            if (f.stop == 1) {
-                                mutex.withLock {
-                                    Log.d(
-                                        Common.MY_TAG,
-                                        "upload: 文件已暂停 thread ${Thread.currentThread().name}"
-                                    )
-                                    val p = findProgress(chunkNumber, totalSplit)
-                                    if (stopNum < p) {
-                                        database.UploadFileDao().keepProgress(
-                                            uploadFileBean.id,
-                                            findProgress(chunkNumber, totalSplit)
-                                        )
-                                        stopNum = p
-                                    }
+                            if (jobList.size >= maxJobSize) {
+                                jobList.forEach {
+                                    Log.d(Common.MY_TAG, "upload2: it join $it")
+                                    it.join()
                                 }
-                            } else {
-                                val res = Api.get(findToken(database)).uploadSplit(
-                                    chunkNumberBody,
-                                    totalSizeBody,
-                                    totalChunksBody,
-                                    filenameBody,
-                                    superIdBody,
-                                    webIdBody,
-                                    idBody,
-                                    filePart
-                                )
-                                if (res.code == "200") {
-                                    val p2 = findProgress(chunkNumber, totalSplit)
-                                    Log.d(
-                                        Common.MY_TAG,
-                                        "分片上传文件成功 $p2 thread ${Thread.currentThread().name}"
-                                    )
-                                    _progress.value = p2
-                                    chunkNumber++
-                                } else {
-                                    Log.w(
-                                        Common.MY_TAG,
-                                        "分片上传文件失败 $res chunkNumber $chunkNumber thread ${Thread.currentThread().name}"
-                                    )
-                                }
+                                jobList.clear()
                             }
                         }
-                        _uploadFiles.value = database.UploadFileDao().findUploadFile()
+                        val job = scope.launch {
+                            Log.d(
+                                Common.MY_TAG,
+                                "upload2: 添加上传请求 ${Thread.currentThread().name}"
+                            )
+                            val uploadBody =
+                                findUploadBody(chunkNumber, uploadFileBean, totalSplit, id, buffer)
+                            val res = Api.get(findToken(database)).uploadSplit(
+                                uploadBody.chunkNumberBody,
+                                uploadBody.totalSizeBody,
+                                uploadBody.totalChunksBody,
+                                uploadBody.filenameBody,
+                                uploadBody.superIdBody,
+                                uploadBody.webIdBody,
+                                uploadBody.idBody,
+                                uploadBody.filePart
+                            )
+                            if (res.code == "200") {
+                                val p2 = findProgress(chunkNumber, totalSplit)
+                                Log.d(
+                                    Common.MY_TAG,
+                                    "分片上传文件成功 $p2 thread ${Thread.currentThread().name}"
+                                )
+                                _progress.value = p2
+                                chunkNumber++
+                            } else {
+                                Log.w(
+                                    Common.MY_TAG,
+                                    "分片上传文件失败 $res chunkNumber $chunkNumber thread ${Thread.currentThread().name}"
+                                )
+                            }
+                        }
+                        jobList.add(job)
                     }
                 }
             }
@@ -643,6 +637,144 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
             Log.e(Common.MY_TAG, "分片文件上传异常", e)
         }
     }
+
+//    fun main() = runBlocking {
+//        val splitSize = 1024 * 1024 * 2L
+//        val totalSize = 1024 * 1024 *100* 2L
+//        val num = 5
+//        val res = findFileTriple(splitSize, totalSize, num)
+//        val jobs = a(res)
+//        jobs.forEach {
+//            it.join()
+//        }
+//    }
+//
+//    suspend fun a(reqData: MutableList<MutableList<Triple<Int, Long, Long>>>): MutableList<Job> {
+//        val jobs = mutableListOf<Job>()
+//        reqData.forEach {
+//            val scope = CoroutineScope(Dispatchers.IO)
+//            val job = scope.launch {
+//                println("队列执行")
+//                b(it)
+//            }
+//            jobs.add(job)
+//        }
+//        return jobs
+//    }
+//
+//    suspend fun b(list: MutableList<Triple<Int, Long, Long>>) {
+//        list.forEach {
+//            sendHttp(it)
+//        }
+//    }
+//
+//    suspend fun sendHttp(triple: Triple<Int, Long, Long>) {
+//        delay(500)
+//        println("${triple.first} ${triple.second} ${triple.third}  模拟发送请求 ${Thread.currentThread().name}")
+//    }
+
+    private fun findFileTriple(
+        splitSize: Long,
+        totalSize: Long,
+        num: Int
+    ): MutableList<MutableList<Triple<Int, Long, Long>>> {
+        val totalSplit = kotlin.math.ceil(totalSize.toDouble() / splitSize).toInt()
+        var n = 1
+        val res: MutableList<MutableList<Triple<Int, Long, Long>>> = mutableListOf()
+        for (i in 0 until num) {
+            val resChild: MutableList<Triple<Int, Long, Long>> = mutableListOf()
+            res.add(resChild)
+        }
+        var index = 0
+        var startTmp = 0L
+        var buffer = splitSize
+        val size = totalSplit / num
+        while (n <= totalSplit) {
+            if (n == totalSplit) {
+                buffer = totalSize - startTmp
+            }
+            val triple = Triple(n, startTmp, startTmp + buffer)
+            val resChild = res[index]
+            if (resChild.size < size) {
+                resChild.add(triple)
+            } else {
+                if (index + 1 == res.size) {
+                    resChild.add(triple)
+                } else {
+                    index++
+                    val resNextChild = res[index]
+                    resNextChild.add(triple)
+                }
+            }
+            startTmp += buffer
+            n++
+        }
+        return res
+    }
+
+    private fun findUploadBody(
+        chunkNumber: Int,
+        uploadFileBean: UploadFileBean,
+        totalSplit: Int,
+        id: String,
+        buffer: ByteArray
+    ): UploadBody {
+        val chunkNumberBody =
+            RequestBody.create(
+                MediaType.parse("text/plain"),
+                chunkNumber.toString()
+            )
+        val totalSizeBody =
+            RequestBody.create(
+                MediaType.parse("text/plain"),
+                uploadFileBean.size.toString()
+            )
+        val totalChunksBody =
+            RequestBody.create(MediaType.parse("text/plain"), totalSplit.toString())
+        val filenameBody =
+            RequestBody.create(MediaType.parse("text/plain"), uploadFileBean.name)
+        val superIdBody =
+            RequestBody.create(MediaType.parse("text/plain"), superId)
+        val idBody =
+            RequestBody.create(MediaType.parse("text/plain"), id)
+        val requestBody = RequestBody.create(
+            MediaType.parse("application/octet-stream"),
+            buffer
+        )
+        val filePart = MultipartBody.Part.createFormData(
+            "file",
+            uploadFileBean.name,
+            requestBody
+        )
+        val webIdBody = RequestBody.create(
+            MediaType.parse(
+                "text/plain"
+            ), uploadFileBean.id.toString()
+        )
+        return UploadBody(
+            chunkNumberBody,
+            totalSizeBody,
+            totalChunksBody,
+            filenameBody,
+            superIdBody,
+            idBody,
+            requestBody,
+            webIdBody,
+            filePart
+        )
+    }
+
+    data class UploadBody(
+        val chunkNumberBody: RequestBody,
+        val totalSizeBody: RequestBody,
+        val totalChunksBody: RequestBody,
+        val filenameBody: RequestBody,
+        val superIdBody: RequestBody,
+        val idBody: RequestBody,
+        val requestBody: RequestBody,
+        val webIdBody: RequestBody,
+        val filePart: MultipartBody.Part,
+    )
 
     fun stopFile(id: Long, stop: Int) {
         viewModelScope.launch(Dispatchers.IO) {

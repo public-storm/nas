@@ -1,5 +1,6 @@
 package com.zwy.nas.screen
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zwy.nas.Common
 import com.zwy.nas.util.FileUtil
 import com.zwy.nas.viewModel.GlobalViewModel
 
@@ -149,7 +151,10 @@ fun UploadList() {
                             Spacer(modifier = Modifier.width(5.dp))
                             IconButton(
                                 modifier = Modifier.size(30.dp),
-                                onClick = { globalViewModel.delLocalUploadFile(uploadFiles[it].id) }) {
+                                onClick = {
+                                    globalViewModel.delLocalUploadFile(uploadFiles[it].id)
+                                    globalViewModel.cancelJob()
+                                }) {
                                 Icon(Icons.Default.Close, contentDescription = null)
                             }
                         }

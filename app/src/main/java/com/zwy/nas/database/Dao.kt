@@ -41,8 +41,11 @@ interface UploadFileDao {
     @Query("SELECT * FROM upload_file")
     suspend fun findUploadFile(): List<UploadFileBean>
 
-    @Query("SELECT * FROM upload_file WHERE stop = 0")
-    fun findNoStopSync(): List<UploadFileBean>
+    @Query("select * from upload_file where status= :status")
+    fun findByStatusSync(status: Int): List<UploadFileBean>
+
+    @Query("select * from upload_file where status= :status")
+    suspend fun findByStatus(status: Int):List<UploadFileBean>
 
     @Query("DELETE FROM upload_file WHERE id = :id")
     suspend fun delUploadFile(id: Long)
@@ -56,11 +59,14 @@ interface UploadFileDao {
     @Query("SELECT * FROM upload_file WHERE name = :name AND superId = :superId")
     suspend fun findByName(name: String, superId: String): UploadFileBean?
 
-    @Query("UPDATE upload_file SET stop = :stop WHERE id = :id")
-    suspend fun stopFile(id: Long, stop: Int)
-
     @Query("UPDATE upload_file SET progress = :progress WHERE id = :id")
     suspend fun keepProgress(id: Long, progress: Int)
+
+    @Query("update upload_file set status = :status where id = :id")
+    suspend fun updateStatus(id: Long, status: Int)
+
+    @Query("update upload_file set status = :status , progress = :progress where id=:id")
+    suspend fun updateStatusAndProgress(id: Long, status: Int, progress: Int)
 }
 
 

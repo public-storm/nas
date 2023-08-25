@@ -24,8 +24,8 @@ data class UploadFileBean(
     val uri: String,
     val size: Long,
     val superId: String,
-    val file: Int,
+    val type: Int,
     var progress: Int,
-    val stop: Int,
+    val status: Int,
 )
 

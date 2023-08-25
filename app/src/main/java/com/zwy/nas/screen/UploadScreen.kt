@@ -117,7 +117,7 @@ fun UploadList() {
                     },
                     leadingContent = {
                         Icon(
-                            imageVector = when (uploadFiles[it].file) {
+                            imageVector = when (uploadFiles[it].type) {
                                 0 -> Icons.Default.Folder
                                 1 -> Icons.Default.Image
                                 2 -> Icons.Default.MusicNote
@@ -136,15 +136,15 @@ fun UploadList() {
                             IconButton(
                                 modifier = Modifier.size(30.dp),
                                 onClick = {
-                                    if (uploadFiles[it].stop == 0) {
-                                        globalViewModel.stopFile(uploadFiles[it].id, 1)
-                                    } else {
+                                    if (uploadFiles[it].status == 0) {
+                                        globalViewModel.stopFile(uploadFiles[it].id, -1)
+                                    } else if (uploadFiles[it].status == -1) {
                                         globalViewModel.stopFile(uploadFiles[it].id, 0)
                                     }
                                 }) {
-                                if (uploadFiles[it].stop == 0) {
+                                if (uploadFiles[it].status == 0) {
                                     Icon(Icons.Default.Pause, contentDescription = null)
-                                } else {
+                                } else if (uploadFiles[it].status == -1) {
                                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                                 }
                             }
@@ -152,8 +152,7 @@ fun UploadList() {
                             IconButton(
                                 modifier = Modifier.size(30.dp),
                                 onClick = {
-                                    globalViewModel.delLocalUploadFile(uploadFiles[it].id)
-                                    globalViewModel.cancelJob()
+                                    globalViewModel.cancelJob(uploadFiles[it].id)
                                 }) {
                                 Icon(Icons.Default.Close, contentDescription = null)
                             }

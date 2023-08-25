@@ -7,7 +7,6 @@ import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import com.zwy.nas.Common
 import com.zwy.nas.WebSocketClient
@@ -22,17 +21,15 @@ import com.zwy.nas.request.SelectFileResponse
 import com.zwy.nas.request.reqPath
 import com.zwy.nas.task.UploadTask
 import com.zwy.nas.util.FileUtil
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType
 import okhttp3.MultipartBody
@@ -40,8 +37,8 @@ import okhttp3.RequestBody
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.io.InputStream
-import java.nio.channels.Pipe
-import kotlin.coroutines.CoroutineContext
+import kotlin.math.max
+import kotlin.math.min
 
 class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     private val _navigateToLogin = mutableStateOf(false)
@@ -65,15 +62,11 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     private val _uploadHistoryFiles = MutableStateFlow<List<UploadFileBean>>(emptyList())
     val uploadHistoryFiles: StateFlow<List<UploadFileBean>> get() = _uploadHistoryFiles
 
-    private val _progress = mutableStateOf(0)
-    val progress: State<Int> get() = _progress
-
     private val _uploadId = mutableStateOf(-1L)
     val uploadId: State<Long> get() = _uploadId
 
     private val _uploadHistory = MutableStateFlow<List<FindHistoryFileResponse>>(emptyList())
     val uploadHistory: StateFlow<List<FindHistoryFileResponse>> get() = _uploadHistory
-
 
     var optFileIndex: Int = -1
 
@@ -82,17 +75,12 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     private val splitSize: Long = 1024 * 1024 * 2L
 
     var contentResolver: ContentResolver? = null
-    private val threadNum = 4
-    var threadPool: CoroutineContext? = null
 
     private var isTask = false
 
-    var i = 0L
+    private val progress = mutableStateOf(0)
 
-    var stopId = mutableListOf<Long>()
-
-    val jobs = mutableListOf<Job>()
-
+    var job: Job? = null
 
     companion object {
         private var instance: GlobalViewModel? = null
@@ -263,9 +251,9 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
     /*
-    1.根据文件名称和上级文件id到本地数据库中查询文件上传列表，如果已存在上传列表中，输出日志（文件已添加至上传列表）
-    2.不在上传文件列表中，添加到上传列表中，查询上传列表数据同步ui界面
-    3.如果当前上传任务没有启动，开启上传任务
+    1.本地数据库中文件上传表中添加记录（判断是否已经有记录，判断依据：文件名、上级文件id）
+    2.查询本地上传表记录，同步上传ui界面
+    3.开启上传任务定时扫描
      */
     fun addLocalUploadFile(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -284,16 +272,13 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
                                     uri = uriStr,
                                     size = pair.second,
                                     superId = superId,
-                                    file = type,
+                                    type = type,
                                     progress = 0,
-                                    stop = 0,
+                                    status = 0,
                                 )
                             )
                         _uploadFiles.value = database.UploadFileDao().findUploadFile()
-                        if (!isTask) {
-                            //开启上传扫描
-                            openUploadTask()
-                        }
+                        openUploadTask()
                     } else {
                         Log.d(Common.MY_TAG, "文件已添加至上传列表")
                     }
@@ -308,26 +293,27 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
 
 
     /*
-    1.开启上传任务，上传任务标识修改为开启
-    2.每间隔1s，查询本地数据库中上传列表中未暂停的上传文件
-    3.如果没有未暂停的上传文件，关闭定时任务，上传任务标识修改为关闭
-    4.如果有未暂停的上传文件，获取第一个上传文件，开启一个协程执行该文件的上传
+    1.判断但是是否正在任务中，避免重复开启
+    2.不在任务中，修改是否在任务中标识，开启定时扫描任务（间隔1s）
+    3.查询本地数据库中待上传文件，如果为空则关闭定时扫描任务，修改是否在任务中标识
+    4.如果上传文件列表不为空，开启一个协程处理上传任务
      */
     private fun openUploadTask() {
-        isTask = true
-        UploadTask.startTask(0, 1000) {
-            val uploadFiles = database.UploadFileDao().findNoStopSync()
-            if (uploadFiles.isNotEmpty()) {
-                val uploadFileBean = uploadFiles[0]
-                runBlocking {
-                    launch(Dispatchers.IO) {
-                        uploadFile(uploadFileBean)
+        if (!isTask) {
+            isTask = true
+            UploadTask.startTask(0, 1000) {
+                val upFiles = database.UploadFileDao().findByStatusSync(0)
+                if (upFiles.isEmpty()) {
+                    Log.d(Common.MY_TAG, "关闭文件上传定时任务")
+                    UploadTask.cancelTask()
+                    isTask = false
+                } else {
+                    runBlocking {
+                        job = launch(Dispatchers.IO) {
+                            uploadFile(upFiles[0])
+                        }
                     }
                 }
-            } else {
-                Log.d(Common.MY_TAG, "关闭文件上传定时任务")
-                UploadTask.cancelTask()
-                isTask = false
             }
         }
     }
@@ -365,8 +351,6 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
 
                     2 -> {
                         Log.d(Common.MY_TAG, "检查文件上传 文件合并中 $res")
-                        createWebSocket(_userId.value)
-                        delLocalUploadFile(uploadFileBean.id)
                     }
 
                     else -> {
@@ -415,7 +399,7 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
         } else {
             createWebSocket(_userId.value)
             contentResolver?.openInputStream(uri)?.use {
-                upload2(uploadFileBean, it, chunks, id)
+                upload(uploadFileBean, it, chunks, id)
             }
         }
     }
@@ -459,7 +443,7 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
-    private fun upload(
+    private suspend fun upload(
         uploadFileBean: UploadFileBean,
         inputStream: InputStream,
         chunks: Set<Int>,
@@ -467,220 +451,59 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     ) {
         try {
             _uploadId.value = uploadFileBean.id
-            _progress.value = 0
+            progress.value = 0
             val buffer = ByteArray(splitSize.toInt())
-            var bytesRead: Int = -1
+            var bytesRead: Int
             var chunkNumber = 1
             val totalSplit = kotlin.math.ceil(uploadFileBean.size.toDouble() / splitSize).toInt()
-            var f: UploadFileBean? = null
             while (true) {
                 val p = findProgress(chunkNumber, totalSplit)
-                runBlocking {
-                    launch(Dispatchers.IO) {
-                        f = database.UploadFileDao().findById(uploadFileBean.id)
-                    }
-                }
-                if (f?.stop == 1) {
-                    Log.d(Common.MY_TAG, "upload: 文件已暂停")
-                    runBlocking {
-                        launch(Dispatchers.IO) {
-                            database.UploadFileDao().keepProgress(uploadFileBean.id, p)
-                            _uploadFiles.value = database.UploadFileDao().findUploadFile()
-                        }
-                    }
-                    break
-                }
                 if (chunkNumber in chunks) {
-                    runBlocking {
-                        launch(Dispatchers.IO) {
-                            inputStream.skip(splitSize)
-                        }
+                    withContext(Dispatchers.IO) {
+                        inputStream.skip(splitSize)
                     }
                 } else {
-                    runBlocking {
-                        launch(Dispatchers.IO) {
-                            bytesRead = inputStream.read(buffer)
-                        }
+                    bytesRead = withContext(Dispatchers.IO) {
+                        inputStream.read(buffer)
                     }
                     if (bytesRead < 0) {
                         break
                     }
-                    val chunkNumberBody =
-                        RequestBody.create(
-                            MediaType.parse("text/plain"),
-                            chunkNumber.toString()
+                    val requestBody =
+                        findUploadBody(chunkNumber, uploadFileBean, totalSplit, id, buffer)
+                    val res = Api.get(findToken(database)).uploadSplit(
+                        requestBody.chunkNumberBody,
+                        requestBody.totalSizeBody,
+                        requestBody.totalChunksBody,
+                        requestBody.filenameBody,
+                        requestBody.superIdBody,
+                        requestBody.webIdBody,
+                        requestBody.idBody,
+                        requestBody.filePart
+                    )
+                    if (res.code == "200") {
+                        progress.value = p
+                        Log.d(Common.MY_TAG, "${uploadFileBean.name} ${progress.value}%")
+                    } else {
+                        Log.w(
+                            Common.MY_TAG,
+                            "分片上传文件失败 $res chunkNumber $chunkNumber thread ${Thread.currentThread().name}"
                         )
-                    val totalSizeBody =
-                        RequestBody.create(
-                            MediaType.parse("text/plain"),
-                            uploadFileBean.size.toString()
-                        )
-                    val totalChunksBody =
-                        RequestBody.create(MediaType.parse("text/plain"), totalSplit.toString())
-                    val filenameBody =
-                        RequestBody.create(MediaType.parse("text/plain"), uploadFileBean.name)
-                    val superIdBody =
-                        RequestBody.create(MediaType.parse("text/plain"), superId)
-                    val idBody =
-                        RequestBody.create(MediaType.parse("text/plain"), id)
-                    val requestBody = RequestBody.create(
-                        MediaType.parse("application/octet-stream"),
-                        buffer
-                    )
-                    val filePart = MultipartBody.Part.createFormData(
-                        "file",
-                        uploadFileBean.name,
-                        requestBody
-                    )
-                    val webIdBody = RequestBody.create(
-                        MediaType.parse(
-                            "text/plain"
-                        ), uploadFileBean.id.toString()
-                    )
-                    runBlocking {
-                        launch(Dispatchers.IO) {
-                            val res = Api.get(findToken(database)).uploadSplit(
-                                chunkNumberBody,
-                                totalSizeBody,
-                                totalChunksBody,
-                                filenameBody,
-                                superIdBody,
-                                webIdBody,
-                                idBody,
-                                filePart
-                            )
-                            if (res.code == "200") {
-                                Log.d(
-                                    Common.MY_TAG,
-                                    "分片上传文件成功 $p thread ${Thread.currentThread().name}"
-                                )
-                                _progress.value = p
-                            } else {
-                                Log.w(
-                                    Common.MY_TAG,
-                                    "分片上传文件失败 $res chunkNumber $chunkNumber thread ${Thread.currentThread().name}"
-                                )
-                            }
-                        }
                     }
                 }
                 chunkNumber++
             }
-            delLocalUploadFile(uploadFileBean.id)
+            if (database.UploadFileDao().findById(uploadFileBean.id).status == 0) {
+                createWebSocket(_userId.value)
+                delLocalUploadFile(uploadFileBean.id)
+            }
+        } catch (jobE: CancellationException) {
+            Log.d(Common.MY_TAG, "任务取消")
         } catch (e: Exception) {
             Log.e(Common.MY_TAG, "分片文件上传异常", e)
         }
     }
 
-    /*
-    1.根据分片大小、文件大小、协程数来拆分分片任务
-    2.执行拆分任务
-    3.对应协程全部执行完毕，进度条复位为0
-    4.删除本地上传文件，同步ui界面
-    5.todo 开启websocket监听服务端信息，收到信息后查询主文件列表同步ui界面
-     */
-    private fun upload2(
-        uploadFileBean: UploadFileBean,
-        inputStream: InputStream,
-        chunks: Set<Int>,
-        id: String
-    ) {
-        try {
-            _uploadId.value = uploadFileBean.id
-            val num = 5
-            val res = findFileTriple(splitSize, uploadFileBean.size, num)
-            runBlocking {
-                a(res, uploadFileBean.id)
-                jobs.forEach {
-                    it.join()
-                }
-                Log.d(Common.MY_TAG, "${uploadFileBean.name} 协程执行完成")
-                _progress.value = 0
-                i = 0
-                if (uploadFileBean.id !in stopId){
-                    delLocalUploadFile(uploadFileBean.id)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(Common.MY_TAG, "分片文件上传异常", e)
-        }
-    }
-
-    /*
-    1.根据拆分的任务开启对应的协程数
-    2.协程执行对应的任务
-     */
-    suspend fun a(
-        reqData: MutableList<MutableList<Triple<Pair<Int, Int>, Long, Long>>>,
-        id: Long
-    ) {
-        reqData.forEach {
-            val scope = CoroutineScope(Dispatchers.IO)
-            val job = scope.launch {
-                println("队列执行")
-                b(it, id)
-            }
-            jobs.add(job)
-        }
-    }
-
-    /*
-    1.判断当前执行文件id是否已经被暂停，未暂停就执行上传任务
-     */
-    suspend fun b(list: MutableList<Triple<Pair<Int, Int>, Long, Long>>, id: Long) {
-        list.forEach {
-            if (id !in stopId) {
-                sendHttp(it)
-            }
-        }
-    }
-
-    suspend fun sendHttp(triple: Triple<Pair<Int, Int>, Long, Long>) {
-        delay(500)
-        i++
-        val p = findProgress(i.toInt(), triple.first.second)
-        _progress.value = p
-        println("${p}%")
-    }
-
-    private fun findFileTriple(
-        splitSize: Long,
-        totalSize: Long,
-        num: Int
-    ): MutableList<MutableList<Triple<Pair<Int, Int>, Long, Long>>> {
-        val totalSplit = kotlin.math.ceil(totalSize.toDouble() / splitSize).toInt()
-        var n = 1
-        val res: MutableList<MutableList<Triple<Pair<Int, Int>, Long, Long>>> = mutableListOf()
-        for (i in 0 until num) {
-            val resChild: MutableList<Triple<Pair<Int, Int>, Long, Long>> = mutableListOf()
-            res.add(resChild)
-        }
-        var index = 0
-        var startTmp = 0L
-        var buffer = splitSize
-        val size = totalSplit / num
-        while (n <= totalSplit) {
-            if (n == totalSplit) {
-                buffer = totalSize - startTmp
-            }
-            val triple = Triple(Pair(n, totalSplit), startTmp, startTmp + buffer)
-            val resChild = res[index]
-            if (resChild.size < size) {
-                resChild.add(triple)
-            } else {
-                if (index + 1 == res.size) {
-                    resChild.add(triple)
-                } else {
-                    index++
-                    val resNextChild = res[index]
-                    resNextChild.add(triple)
-                }
-            }
-            startTmp += buffer
-            n++
-        }
-        return res
-    }
 
     private fun findUploadBody(
         chunkNumber: Int,
@@ -752,34 +575,31 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     3.如果是开启上传，在暂停上传列表中移除当前文件id，如果当前定时上传任务未开启，开启定时上传扫描任务
     4.如果是暂停上传，在暂停上传列表中添加当前文件id
      */
-    fun stopFile(id: Long, stop: Int) {
+    fun stopFile(id: Long, status: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            database.UploadFileDao().stopFile(id, stop)
-            _uploadFiles.value = database.UploadFileDao().findUploadFile()
-            if (stop == 0) {
-                stopId.remove(id)
-                if (!isTask) {
-                    openUploadTask()
-                }
-            } else {
-                stopId.add(id)
-                cancelJob()
+            if (status == 0) {
+                database.UploadFileDao().updateStatus(id, 0)
+                _uploadFiles.value = database.UploadFileDao().findUploadFile()
+                openUploadTask()
+            } else if (status == -1) {
+                database.UploadFileDao().updateStatusAndProgress(id, -1, progress.value)
+                _uploadFiles.value = database.UploadFileDao().findUploadFile()
+                job?.cancel()
             }
         }
     }
 
-    fun cancelJob() {
-        jobs.forEach {
-            it.cancel()
-        }
+    fun cancelJob(id: Long) {
+        job?.cancel()
+        delLocalUploadFile(id)
     }
 
+
     fun viewFindProgress(uploadFileBean: UploadFileBean): Int {
-        return if (uploadFileBean.id == _uploadId.value) {
-            _progress.value
-        } else {
-            uploadFileBean.progress
+        if (uploadFileBean.id == _uploadId.value) {
+            return max(progress.value, uploadFileBean.progress)
         }
+        return uploadFileBean.progress
     }
 
 

@@ -35,7 +35,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -52,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,6 +67,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.ByteArrayDataSource
+import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.zwy.nas.Common
@@ -76,42 +79,28 @@ import com.zwy.nas.viewModel.GlobalViewModel
 @SuppressLint("UnrememberedMutableState")
 @Composable
 fun FileScreen() {
-//    val context = LocalContext.current
-//    val globalViewModel = GlobalViewModel.getInstance(null)
-//    if (globalViewModel.contentResolver == null) {
-//        globalViewModel.contentResolver = context.contentResolver
-//    }
-//    val upFiles = mutableStateListOf<Pair<String, String>>()
-//    PathRow(upFiles)
-//    ListBox(upFiles)
-    Test()
+    val context = LocalContext.current
+    val globalViewModel = GlobalViewModel.getInstance(null)
+    if (globalViewModel.contentResolver == null) {
+        globalViewModel.contentResolver = context.contentResolver
+    }
+    val upFiles = mutableStateListOf<Pair<String, String>>()
+    PathRow(upFiles)
+    ListBox(upFiles)
 }
+
+@UnstableApi
+class ByteArrayDataSourceFactory(private val data: ByteArray) : DataSource.Factory {
+    override fun createDataSource(): DataSource {
+        return ByteArrayDataSource(data)
+    }
+}
+
+
+
 
 @Composable
 fun Test() {
-    val videoUri = "http://10.23.100.186:8777/video2"
-    val context = LocalContext.current
-    val player = ExoPlayer.Builder(context).build()
-    val mediaItem = MediaItem.fromUri(videoUri)
-    val mediaItem2 = MediaItem.fromUri(videoUri)
-    player.addMediaItem(mediaItem)
-    player.addMediaItem(mediaItem2)
-    player.prepare()
-    player.play()
-    AndroidView(
-        factory = {
-            PlayerView(it).apply {
-                useController = true
-                this.player = player
-            }
-        }, modifier = Modifier
-            .fillMaxWidth()
-            .height(400.dp)
-    )
-}
-
-@Composable
-fun Test2() {
     val hlsUri = "http://10.23.100.186:8777/video"
     val context = LocalContext.current
     val player = ExoPlayer.Builder(context).build()

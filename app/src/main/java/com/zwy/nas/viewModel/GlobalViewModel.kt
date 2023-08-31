@@ -8,7 +8,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.exoplayer.ExoPlayer
 import com.zwy.nas.Common
 import com.zwy.nas.WebSocketClient
 import com.zwy.nas.database.AppDatabase
@@ -23,10 +22,8 @@ import com.zwy.nas.request.reqPath
 import com.zwy.nas.task.UploadTask
 import com.zwy.nas.util.FileUtil
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -39,7 +36,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.io.InputStream
 import kotlin.math.max
-import kotlin.math.min
 
 class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     private val _navigateToLogin = mutableStateOf(false)
@@ -82,6 +78,19 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     private val progress = mutableStateOf(0)
 
     var job: Job? = null
+
+    fun filePlay(): ByteArray? {
+        var data: ByteArray? = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val res = Api.get(findToken(database)).filePlay(1)
+                data = res.bytes()
+            } catch (e: Exception) {
+                Log.e(Common.MY_TAG, "filePlay: 获取播放文件异常", e)
+            }
+        }
+        return data
+    }
 
     companion object {
         private var instance: GlobalViewModel? = null

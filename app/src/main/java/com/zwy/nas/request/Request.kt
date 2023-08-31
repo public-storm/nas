@@ -6,6 +6,7 @@ import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
 import okhttp3.Response
+import okhttp3.ResponseBody
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
@@ -89,6 +90,9 @@ interface IApi {
 
     @DELETE("/history")
     suspend fun delAllHistoryFile(): ResponseResult<Unit>
+
+    @GET("/video4")
+    suspend fun filePlay(@Query("index") index: Long): ResponseBody
 }
 
 class HeaderInterceptor(private val token: String) : Interceptor {

@@ -3,8 +3,11 @@ package com.zwy.nas.screen
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
+import android.view.View
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -75,28 +79,56 @@ import androidx.media3.ui.PlayerView
 import com.zwy.nas.Common
 import com.zwy.nas.util.FileUtil
 import com.zwy.nas.viewModel.GlobalViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @SuppressLint("UnrememberedMutableState")
 @Composable
 fun FileScreen() {
+//    val context = LocalContext.current
+//    val globalViewModel = GlobalViewModel.getInstance(null)
+//    if (globalViewModel.contentResolver == null) {
+//        globalViewModel.contentResolver = context.contentResolver
+//    }
+//    val upFiles = mutableStateListOf<Pair<String, String>>()
+//    PathRow(upFiles)
+//    ListBox(upFiles)
+    Test2()
+}
+
+
+@Composable
+fun Test2() {
     val context = LocalContext.current
-    val globalViewModel = GlobalViewModel.getInstance(null)
-    if (globalViewModel.contentResolver == null) {
-        globalViewModel.contentResolver = context.contentResolver
+    val privateDir = context.getExternalFilesDir(null)
+    val globalViewModel = GlobalViewModel.getInstance(null);
+    val player = ExoPlayer.Builder(context).build()
+    val mediaItem =
+        MediaItem.fromUri(Uri.fromFile(File(File(privateDir, "my_file"), "my_file.mp4")))
+    Column() {
+        AndroidView(
+            factory = {
+                PlayerView(it).apply {
+                    useController = true
+                    this.player = player
+                }
+            }, modifier = Modifier
+                .fillMaxWidth()
+                .height(400.dp)
+        )
+        Button(onClick = {
+            if (privateDir != null) {
+                globalViewModel.test(privateDir)
+                player.setMediaItem(mediaItem)
+                player.pause()
+                player.play()
+            }
+        }) {
+            Text(text = "测试")
+        }
     }
-    val upFiles = mutableStateListOf<Pair<String, String>>()
-    PathRow(upFiles)
-    ListBox(upFiles)
 }
-
-@UnstableApi
-class ByteArrayDataSourceFactory(private val data: ByteArray) : DataSource.Factory {
-    override fun createDataSource(): DataSource {
-        return ByteArrayDataSource(data)
-    }
-}
-
-
 
 
 @Composable
@@ -208,9 +240,12 @@ fun ListBox(list: MutableList<Pair<String, String>>) {
                 ListItem(
                     headlineContent = {
                         TextButton(onClick = {
-                            globalViewModel.superId = files[it].id
-                            list.add(Pair(files[it].id, files[it].name))
-                            globalViewModel.findServerFiles()
+                            val f = files[it]
+                            if (f.file == 0) {
+                                globalViewModel.superId = files[it].id
+                                list.add(Pair(files[it].id, files[it].name))
+                                globalViewModel.findServerFiles()
+                            }
                         }) {
                             Text(
                                 text = files[it].name,
@@ -622,26 +657,5 @@ fun MyDialog(
                 body()
             }
         }
-    }
-}
-
-@Composable
-fun FileSelection(
-    btnText: String,
-    modifier: Modifier,
-    onFileSelected: (Uri) -> Unit
-) {
-    val fileChooserLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-        onResult = { uri ->
-            if (uri != null) {
-                onFileSelected(uri)
-            }
-        }
-    )
-    TextButton(onClick = {
-        fileChooserLauncher.launch("*/*")
-    }, modifier = modifier) {
-        Text(btnText)
     }
 }

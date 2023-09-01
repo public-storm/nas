@@ -93,6 +93,9 @@ interface IApi {
 
     @GET("/video4")
     suspend fun filePlay(@Query("index") index: Long): ResponseBody
+
+    @GET("/video5")
+    suspend fun findChunkSize(): ResponseResult<Long>
 }
 
 class HeaderInterceptor(private val token: String) : Interceptor {

@@ -46,24 +46,12 @@ fun CreateDir() {
     val context = LocalContext.current
     val externalFilesDir = context.getExternalFilesDir(null)
     if (externalFilesDir != null) {
-        // 创建私有目录，例如 "my_private_directory"
-        val privateDir = File(externalFilesDir, "nas")
         // 确保目录存在
-        if (!privateDir.exists()) {
+        if (!externalFilesDir.exists()) {
             Log.d(Common.MY_TAG, "CreateDir: 创建目录")
-            privateDir.mkdirs()
+            externalFilesDir.mkdirs()
         } else {
             Log.d(Common.MY_TAG, "CreateDir: 目录已经创建")
-        }
-        val absolutePath = privateDir.absolutePath
-        println("Absolute Path: $absolutePath")
-        val testFile = File(privateDir, "test.txt")
-
-        try {
-            testFile.createNewFile()
-            testFile.writeText("Hello, world!")
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 }
@@ -76,7 +64,7 @@ fun App(globalViewModel: GlobalViewModel) {
         startDestination = if (globalViewModel.navigateToLogin.value) "login" else "home"
     ) {
         composable("login") { LoginScreen(navController) }
-        composable("home") { HomeScreen(navController) }
+        composable("home") { HomeScreen() }
     }
 }
 

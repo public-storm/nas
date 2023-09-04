@@ -31,5 +31,12 @@ data class FindHistoryFileResponse(
     @SerializedName("createTime")
     val createTime: String,
     @SerializedName("fileType")
-    val fileType:Int
+    val fileType: Int
+)
+
+data class FindDownloadChunkResponse(
+    @SerializedName("chunkTotal")
+    val chunkTotal: Long,
+    @SerializedName("chunkSize")
+    val chunkSize: Long,
 )

@@ -1,16 +1,15 @@
 package com.zwy.nas.viewModel
 
 import android.content.ContentResolver
-import android.net.Uri
-import android.provider.OpenableColumns
 import android.util.Log
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zwy.nas.Common
-import com.zwy.nas.WebSocketClient
 import com.zwy.nas.database.AppDatabase
+import com.zwy.nas.database.DownloadFileBean
 import com.zwy.nas.database.TokenBean
 import com.zwy.nas.database.UploadFileBean
 import com.zwy.nas.request.Api
@@ -18,26 +17,12 @@ import com.zwy.nas.request.CreateDirectoryRequest
 import com.zwy.nas.request.FindHistoryFileResponse
 import com.zwy.nas.request.LoginRequest
 import com.zwy.nas.request.SelectFileResponse
-import com.zwy.nas.request.reqPath
-import com.zwy.nas.task.UploadTask
-import com.zwy.nas.util.FileUtil
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType
-import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
-import kotlin.math.max
 
 class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     private val _navigateToLogin = mutableStateOf(false)
@@ -67,7 +52,9 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
 
     var bol = false
 
-    private val files = MutableStateFlow<List<SelectFileResponse>>(emptyList())
+    val pathFiles = mutableStateListOf<Pair<String, String>>()
+
+    val files = MutableStateFlow<List<SelectFileResponse>>(emptyList())
 
     fun test(dir: File) {
         if (!bol) {
@@ -166,6 +153,7 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     fun findServerFiles() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                Log.d(Common.MY_TAG, "findServerFiles: 上级文件id $superId")
                 val res = Api.get(findToken(database)).findFiles(superId)
                 if (res.code == "200") {
                     Log.d(Common.MY_TAG, "findFiles: ${res.data}")
@@ -228,9 +216,6 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
 
-
-
-
     fun findServerUploadHistory() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -262,8 +247,25 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
-    fun addLocalUploadFile(uri: Uri) {
+    fun onClickFile(index: Int) {
+        val f = files.value[index]
+        if (f.file == 0) {
+            superId = f.id
+            val pair = Pair(f.id, f.name)
+            pathFiles.add(pair)
+            findServerFiles()
+        }
+    }
 
+    fun findDownloadFileBean(index: Int): DownloadFileBean {
+        val selectFileResponse = files.value[index];
+        return DownloadFileBean(
+            selectFileResponse.id,
+            selectFileResponse.name,
+            selectFileResponse.size,
+            0,
+            selectFileResponse.file
+        )
     }
 
     private fun findProgress(numerator: Int, denominator: Int): Int {

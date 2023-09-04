@@ -17,7 +17,9 @@ import com.zwy.nas.database.DatabaseHolder
 import com.zwy.nas.screen.HomeScreen
 import com.zwy.nas.screen.LoginScreen
 import com.zwy.nas.ui.theme.NasTheme
+import com.zwy.nas.viewModel.DownloadViewModel
 import com.zwy.nas.viewModel.GlobalViewModel
+import com.zwy.nas.viewModel.UploadViewModel
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -33,6 +35,13 @@ class MainActivity : ComponentActivity() {
                 ) {
                     CreateDir()
                     val globalViewModel = GlobalViewModel.getInstance(database)
+                    val uploadViewModel = UploadViewModel.getInstance(database)
+                    val downloadViewModel = DownloadViewModel.getInstance(database)
+                    uploadViewModel.addGlobalViewModel(globalViewModel)
+                    uploadViewModel.addContentResolver(contentResolver)
+                    val context = LocalContext.current
+                    val dir = context.getExternalFilesDir(null)
+                    downloadViewModel.addDir(dir!!)
                     globalViewModel.findUser()
                     App(globalViewModel)
                 }

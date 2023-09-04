@@ -19,10 +19,10 @@ import retrofit2.http.Part
 import retrofit2.http.Query
 
 //const val reqPath = "192.168.0.3:8777"
-const val reqPath = "10.23.100.186:8777"
+//const val reqPath = "10.23.100.186:8777"
 //const val reqPath= "192.168.43.6:8777"
 //const val reqPath= "192.168.137.1:8777"
-//const val reqPath = "192.168.110.103:8777"
+const val reqPath = "192.168.110.103:8777"
 //const val reqPath= "192.168.110.103:8777"
 
 data class ResponseResult<T>(
@@ -90,6 +90,12 @@ interface IApi {
 
     @DELETE("/history")
     suspend fun delAllHistoryFile(): ResponseResult<Unit>
+
+    @GET("/download/chunk")
+    suspend fun findDownloadChunk(): ResponseResult<FindDownloadChunkResponse>
+
+    @GET("/download")
+    suspend fun download(id: String, index: Long): ResponseBody
 
     @GET("/video4")
     suspend fun filePlay(@Query("index") index: Long): ResponseBody

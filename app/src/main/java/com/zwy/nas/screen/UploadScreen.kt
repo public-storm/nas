@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zwy.nas.util.FileUtil
 import com.zwy.nas.viewModel.GlobalViewModel
+import com.zwy.nas.viewModel.UploadViewModel
 
 @Composable
 fun UploadScreen() {
@@ -78,9 +79,10 @@ fun UploadTab(state: Int, onClick: (Int) -> Unit) {
 
 @Composable
 fun UploadList() {
-    val globalViewModel = GlobalViewModel.getInstance(null);
-    val uploadFiles by globalViewModel.uploadFiles.collectAsState()
-    globalViewModel.findLocalUploadFile()
+    val globalViewModel = GlobalViewModel.getInstance(null)
+    val uploadViewModel = UploadViewModel.getInstance(null)
+    val uploadFiles by uploadViewModel.uploadFiles.collectAsState()
+    uploadViewModel.findLocalUploadFile()
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -103,11 +105,11 @@ fun UploadList() {
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(text = FileUtil.formatFileSize(uploadFiles[it].size))
-                                Text(text = "${globalViewModel.viewFindProgress(uploadFiles[it])}%")
+                                Text(text = "${uploadViewModel.viewFindProgress(uploadFiles[it])}%")
                             }
                             Spacer(modifier = Modifier.height(3.dp))
                             LinearProgressIndicator(
-                                progress = globalViewModel.viewFindProgress(uploadFiles[it]) / 100f,
+                                progress = uploadViewModel.viewFindProgress(uploadFiles[it]) / 100f,
                                 modifier = Modifier.fillMaxWidth(),
                                 strokeCap = StrokeCap.Round,
                             )
@@ -135,9 +137,17 @@ fun UploadList() {
                                 modifier = Modifier.size(30.dp),
                                 onClick = {
                                     if (uploadFiles[it].status == 0) {
-                                        globalViewModel.stopFile(uploadFiles[it].id, -1)
+                                        uploadViewModel.stopFile(
+                                            uploadFiles[it].id,
+                                            -1,
+                                            globalViewModel.userId.value,
+                                            globalViewModel.superId
+                                        )
                                     } else if (uploadFiles[it].status == -1) {
-                                        globalViewModel.stopFile(uploadFiles[it].id, 0)
+                                        uploadViewModel.stopFile(
+                                            uploadFiles[it].id, 0, globalViewModel.userId.value,
+                                            globalViewModel.superId
+                                        )
                                     }
                                 }) {
                                 if (uploadFiles[it].status == 0) {
@@ -150,7 +160,7 @@ fun UploadList() {
                             IconButton(
                                 modifier = Modifier.size(30.dp),
                                 onClick = {
-                                    globalViewModel.cancelJob(uploadFiles[it].id)
+                                    uploadViewModel.cancelJob(uploadFiles[it].id)
                                 }) {
                                 Icon(Icons.Default.Close, contentDescription = null)
                             }

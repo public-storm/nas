@@ -29,3 +29,13 @@ data class UploadFileBean(
     val status: Int,
 )
 
+@Entity(tableName = "download_file")
+data class DownloadFileBean(
+    val id: String,
+    val name: String,
+    val size: Long,
+    val status: Int,
+    val type: Int,
+    val progress: Int
+)
+

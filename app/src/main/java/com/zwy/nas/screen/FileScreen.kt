@@ -1,13 +1,9 @@
 package com.zwy.nas.screen
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.media.AudioManager
-import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
-import android.view.View
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -55,7 +51,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,30 +66,22 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.ByteArrayDataSource
-import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.zwy.nas.Common
 import com.zwy.nas.util.FileUtil
+import com.zwy.nas.viewModel.DownloadViewModel
 import com.zwy.nas.viewModel.GlobalViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.zwy.nas.viewModel.UploadViewModel
 import java.io.File
 
-@SuppressLint("UnrememberedMutableState")
+/*
+总文件页面
+ */
 @Composable
 fun FileScreen() {
-//    val context = LocalContext.current
-//    val globalViewModel = GlobalViewModel.getInstance(null)
-//    if (globalViewModel.contentResolver == null) {
-//        globalViewModel.contentResolver = context.contentResolver
-//    }
-//    val upFiles = mutableStateListOf<Pair<String, String>>()
-//    PathRow(upFiles)
-//    ListBox(upFiles)
-    Test2()
+    PathRow()
+    ListBox()
 }
 
 
@@ -168,10 +155,18 @@ fun PlayerSurface(
     )
 }
 
-
+/*
+自定义文件目录
+用户点击文件夹后，可以使用这个选择点击历史跳转文件夹，超过3个点击历史隐藏之前的，保留最后三个
+实现方案
+1.修改当前上级文件id
+2.根据当前上级文件id查询服务端文件列表
+3.同步文件列表
+ */
 @Composable
-fun PathRow(list: MutableList<Pair<String, String>>) {
+fun PathRow() {
     val globalViewModel = GlobalViewModel.getInstance(null)
+    val list = globalViewModel.pathFiles
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -212,13 +207,16 @@ fun PathRow(list: MutableList<Pair<String, String>>) {
                 )
             }
         }
-
     }
 }
 
+/*
+文件列表
+ */
 @Composable
-fun ListBox(list: MutableList<Pair<String, String>>) {
-    val globalViewModel = GlobalViewModel.getInstance(null);
+fun ListBox() {
+    val globalViewModel = GlobalViewModel.getInstance(null)
+    val downloadViewModel = DownloadViewModel.getInstance(null)
     val files by globalViewModel.files.collectAsState()
     globalViewModel.findServerFiles()
     var openAddBtnDialog by remember { mutableStateOf(false) }
@@ -240,12 +238,7 @@ fun ListBox(list: MutableList<Pair<String, String>>) {
                 ListItem(
                     headlineContent = {
                         TextButton(onClick = {
-                            val f = files[it]
-                            if (f.file == 0) {
-                                globalViewModel.superId = files[it].id
-                                list.add(Pair(files[it].id, files[it].name))
-                                globalViewModel.findServerFiles()
-                            }
+                            globalViewModel.onClickFile(it)
                         }) {
                             Text(
                                 text = files[it].name,
@@ -281,7 +274,11 @@ fun ListBox(list: MutableList<Pair<String, String>>) {
                             onDismissRequest = {
                                 expanded = false
                             },
-                            delClick = { openDelDialog = true }) {
+                            delClick = { openDelDialog = true },
+                            download = {
+                                val downloadFileBean = globalViewModel.findDownloadFileBean(it)
+                                downloadViewModel.addDownloadTask(downloadFileBean)
+                            }) {
                             openRenameDialog = true
                         }
                     },
@@ -296,15 +293,19 @@ fun ListBox(list: MutableList<Pair<String, String>>) {
         ) {
             Icon(Icons.Default.Add, contentDescription = null)
         }
+        //文件操作浮动按钮弹框
         AddBtnDialog(openDialog = openAddBtnDialog) {
             openAddBtnDialog = false
         }
+        //重命名文件弹框
         RenameFileDialog(openRenameDialog = openRenameDialog) {
             openRenameDialog = false
         }
+        //删除文件弹框
         DelFileDialog(openDelDialog = openDelDialog) {
             openDelDialog = false
         }
+        //文件详情弹框
         FileInfo(openFileInfo = openFileInfo) {
             openFileInfo = false
         }
@@ -318,6 +319,7 @@ fun FilesTrailing(
     onDismissRequest: () -> Unit,
     infoClick: () -> Unit,
     delClick: () -> Unit,
+    download: () -> Unit,
     rNameClick: () -> Unit
 ) {
     Box() {
@@ -358,7 +360,10 @@ fun FilesTrailing(
                 })
             DropdownMenuItem(
                 text = { Text("下载") },
-                onClick = { onDismissRequest() },
+                onClick = {
+                    onDismissRequest()
+                    download()
+                },
                 leadingIcon = {
                     Icon(
                         Icons.Outlined.Download,
@@ -533,17 +538,23 @@ fun RenameFileDialog(openRenameDialog: Boolean, onClick: () -> Unit) {
     }
 }
 
-
+/*
+文件操作弹框
+ */
 @Composable
 fun AddBtnDialog(openDialog: Boolean, onClick: () -> Unit) {
     val context = LocalContext.current
     var openCreateDirDialog by remember { mutableStateOf(false) }
     val globalViewModel = GlobalViewModel.getInstance(null)
+    val uploadViewModel = UploadViewModel.getInstance(null)
     val fileChooserLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
             if (uri != null) {
-                globalViewModel.addLocalUploadFile(uri)
+                //添加文件上传任务
+                val superId = globalViewModel.superId
+                val userId = globalViewModel.userId.value
+                uploadViewModel.addUploadTask(uri, superId, userId)
             }
         }
     )
@@ -562,12 +573,15 @@ fun AddBtnDialog(openDialog: Boolean, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             TextButton(onClick = {
+                //关闭弹框
                 onClick()
+                //开启创建文件夹输入框弹框
                 openCreateDirDialog = true
             }, modifier = Modifier.fillMaxWidth()) {
                 Text(text = "创建文件夹")
             }
             TextButton(onClick = {
+                //打开文件选择弹框
                 if (ContextCompat.checkSelfPermission(
                         context,
                         Manifest.permission.READ_EXTERNAL_STORAGE
@@ -579,6 +593,7 @@ fun AddBtnDialog(openDialog: Boolean, onClick: () -> Unit) {
                     Log.d(Common.MY_TAG, "Test: 未授权，开始授权")
                     requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
                 }
+                //关闭弹框
                 onClick()
             }, modifier = Modifier.fillMaxWidth()) {
                 Text("上传文件")
@@ -586,6 +601,7 @@ fun AddBtnDialog(openDialog: Boolean, onClick: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
             TextButton(
                 onClick = {
+                    //关闭弹框
                     onClick()
                 },
                 modifier = Modifier.align(Alignment.End)
@@ -594,11 +610,15 @@ fun AddBtnDialog(openDialog: Boolean, onClick: () -> Unit) {
             }
         }
     }
+    //打开创建文件弹框
     CreateDirDialog(openCreateDirDialog = openCreateDirDialog) {
         openCreateDirDialog = false
     }
 }
 
+/*
+创建文件弹框
+ */
 @Composable
 fun CreateDirDialog(openCreateDirDialog: Boolean, onClick: () -> Unit) {
     var dirName by remember { mutableStateOf("") }
@@ -638,6 +658,9 @@ fun CreateDirDialog(openCreateDirDialog: Boolean, onClick: () -> Unit) {
     }
 }
 
+/*
+自定义弹框
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyDialog(

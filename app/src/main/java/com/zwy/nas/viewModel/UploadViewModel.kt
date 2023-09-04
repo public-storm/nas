@@ -46,7 +46,7 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
 
     private var contentResolver: ContentResolver? = null
 
-    private val uploadFiles = MutableStateFlow<List<UploadFileBean>>(emptyList())
+    val uploadFiles = MutableStateFlow<List<UploadFileBean>>(emptyList())
 
     private var isTask = false
 
@@ -59,17 +59,30 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
     private val progress = mutableStateOf(0)
 
     private var globalViewModel: GlobalViewModel? = null
+
+    fun addGlobalViewModel(globalViewModel: GlobalViewModel) {
+        if (this.globalViewModel == null) {
+            this.globalViewModel = globalViewModel
+        }
+    }
+
+    fun addContentResolver(contentResolver: ContentResolver) {
+        if (this.contentResolver == null) {
+            this.contentResolver = contentResolver
+        }
+    }
+
     fun addUploadTask(uri: Uri, superId: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val uriStr = uri.toString()
                 val pair = findPathSize(uri)
                 if (pair != null) {
-                    val same = database.UploadFileDao().findByName(pair.first, superId)
+                    val same = database.uploadFileDao().findByName(pair.first, superId)
                     if (same == null) {
                         val suffix = ".${pair.first.substringAfterLast(".")}"
                         val type = FileUtil.findFileType(suffix)
-                        database.UploadFileDao()
+                        database.uploadFileDao()
                             .insertUploadFile(
                                 UploadFileBean(
                                     name = pair.first,
@@ -81,7 +94,7 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
                                     status = 0,
                                 )
                             )
-                        uploadFiles.value = database.UploadFileDao().findUploadFile()
+                        uploadFiles.value = database.uploadFileDao().findUploadFile()
                         openUploadTask(userId, superId)
                     } else {
                         Log.d(Common.MY_TAG, "文件已添加至上传列表")
@@ -113,9 +126,9 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
         if (!isTask) {
             isTask = true
             UploadTask.startTask(0, 1000) {
-                val upFiles = database.UploadFileDao().findByStatusSync(0)
+                val upFiles = database.uploadFileDao().findByStatusSync(0)
                 if (upFiles.isEmpty()) {
-                    Log.d(Common.MY_TAG, "关闭文件上传定时任务")
+                    Log.d(Common.MY_TAG, "关闭文件上传定时扫描任务")
                     UploadTask.cancelTask()
                     isTask = false
                 } else {
@@ -185,19 +198,20 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
                 singleUpload(uploadFileBean, it, id, superId)
             }
         } else {
-            createWebSocket(userId)
+            createWebSocket(userId,superId)
             contentResolver?.openInputStream(uri)?.use {
                 upload(uploadFileBean, it, chunks, id, userId, superId)
             }
         }
     }
 
-    private fun createWebSocket(userId: String) {
+    private fun createWebSocket(userId: String, superId: String) {
         Log.d(Common.MY_TAG, "创建webSocket连接 $userId")
         val webSocketUrl = "ws://$reqPath/webSocket/${userId}"
         val webSocketListener = object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 findLocalUploadFile()
+                findServerFiles(superId)
             }
         }
         WebSocketClient.connect(webSocketUrl, webSocketListener)
@@ -205,7 +219,7 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun findLocalUploadFile() {
         viewModelScope.launch(Dispatchers.IO) {
-            uploadFiles.value = database.UploadFileDao().findUploadFile()
+            uploadFiles.value = database.uploadFileDao().findUploadFile()
         }
     }
 
@@ -253,8 +267,8 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
 
     private fun delLocalUploadFile(id: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            database.UploadFileDao().delUploadFile(id)
-            uploadFiles.value = database.UploadFileDao().findUploadFile()
+            database.uploadFileDao().delUploadFile(id)
+            uploadFiles.value = database.uploadFileDao().findUploadFile()
         }
     }
 
@@ -311,8 +325,8 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
                 }
                 chunkNumber++
             }
-            if (database.UploadFileDao().findById(uploadFileBean.id).status == 0) {
-                createWebSocket(userId)
+            if (database.uploadFileDao().findById(uploadFileBean.id).status == 0) {
+                createWebSocket(userId,superId)
                 delLocalUploadFile(uploadFileBean.id)
             }
         } catch (jobE: CancellationException) {
@@ -383,12 +397,12 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
     fun stopFile(id: Long, status: Int, userId: String, superId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             if (status == 0) {
-                database.UploadFileDao().updateStatus(id, 0)
-                uploadFiles.value = database.UploadFileDao().findUploadFile()
+                database.uploadFileDao().updateStatus(id, 0)
+                uploadFiles.value = database.uploadFileDao().findUploadFile()
                 openUploadTask(userId, superId)
             } else if (status == -1) {
-                database.UploadFileDao().updateStatusAndProgress(id, -1, progress.value)
-                uploadFiles.value = database.UploadFileDao().findUploadFile()
+                database.uploadFileDao().updateStatusAndProgress(id, -1, progress.value)
+                uploadFiles.value = database.uploadFileDao().findUploadFile()
                 job?.cancel()
             }
         }

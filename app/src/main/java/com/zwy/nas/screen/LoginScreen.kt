@@ -49,6 +49,9 @@ import com.zwy.nas.Common
 import com.zwy.nas.R
 import com.zwy.nas.viewModel.GlobalViewModel
 
+/*
+登录界面
+ */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LoginScreen(navController: NavHostController) {
@@ -59,13 +62,18 @@ fun LoginScreen(navController: NavHostController) {
             .clickable(onClick = { keyboardController!!.hide() })
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            //登录logo
             LoginImage()
             Spacer(modifier = Modifier.height(10.dp))
+            //登录输入表单
             LoginBox(navController, keyboardController!!)
         }
     }
 }
 
+/*
+登录logo图片
+ */
 @Composable
 fun LoginImage() {
     Image(
@@ -77,6 +85,9 @@ fun LoginImage() {
     )
 }
 
+/*
+登录输入界面
+ */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LoginBox(
@@ -148,6 +159,9 @@ fun LoginBox(
     }
 }
 
+/*
+自定义输入框
+ */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MyTextField(

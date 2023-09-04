@@ -39,6 +39,9 @@ import androidx.navigation.NavHostController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+/*
+主页面
+ */
 @Composable
 fun HomeScreen() {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -46,12 +49,14 @@ fun HomeScreen() {
     val items = findDrawerItems()
     val selectedItem = remember { mutableStateOf(items[0]) }
     var route by remember { mutableStateOf(0) }
+    //侧边栏
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
                 Spacer(Modifier.height(12.dp))
                 items.forEachIndexed { i, item ->
+                    //侧边栏菜单
                     NavigationDrawerItem(
                         icon = { Icon(item.imageVector, contentDescription = null) },
                         label = { Text(item.name) },
@@ -76,14 +81,17 @@ fun HomeScreen() {
                 HomeTitle(scope = scope, drawerState = drawerState)
                 when (route) {
                     0 -> {
+                        //总文件页面
                         FileScreen()
                     }
 
                     1 -> {
+                        //文件上传
                         UploadScreen()
                     }
 
                     2 -> {
+                        //文件下载
                         DownloadScreen()
                     }
                 }
@@ -93,8 +101,9 @@ fun HomeScreen() {
     )
 }
 
-
-
+/*
+总页面头
+ */
 @Composable
 fun HomeTitle(scope: CoroutineScope, drawerState: DrawerState) {
     Row(
@@ -115,6 +124,9 @@ fun HomeTitle(scope: CoroutineScope, drawerState: DrawerState) {
 
 data class DrawerItem(val imageVector: ImageVector, val name: String)
 
+/*
+侧边栏菜单定义
+ */
 fun findDrawerItems(): List<DrawerItem> {
     return listOf(
         DrawerItem(Icons.Default.Home, "主页"),

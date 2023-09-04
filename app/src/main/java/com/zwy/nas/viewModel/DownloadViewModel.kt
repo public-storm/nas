@@ -126,7 +126,8 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
                     file.createNewFile()
                 }
             }
-            val findChunkRes = Api.get(findToken(database)).findDownloadChunk()
+            val id = downloadFileBean.id
+            val findChunkRes = Api.get(findToken(database)).findDownloadChunk(id)
             if (findChunkRes.code == "200") {
                 val chunkSize = findChunkRes.data!!.chunkSize
                 val chunkTotal = findChunkRes.data!!.chunkTotal
@@ -134,9 +135,11 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
                 //文件追加或文件覆盖
                 if (fileSize % chunkSize == 0L) {
                     //文件追加
+                    Log.d(Common.MY_TAG, "文件追加 ${downloadFileBean.name}")
                     appendToFile(file, chunkTotal, chunkSize, downloadFileBean.id)
                 } else {
                     //文件覆盖
+                    Log.d(Common.MY_TAG, "文件覆盖追加 ${downloadFileBean.name}")
                     writeToPosition(file, chunkTotal, chunkSize, downloadFileBean.id)
                 }
             } else {
@@ -157,7 +160,8 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
         id: String
     ) {
         val fileSize = file.length()
-        val index = if (fileSize > 0) (fileSize / chunkSize) + 1 else 0L
+        val index = if (fileSize > 0) (fileSize / chunkSize) + 1 else 1L
+        Log.d(Common.MY_TAG, "文件追加 index $index")
         writeFile(file, id, index, chunkTotal)
     }
 
@@ -175,6 +179,7 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
         val hasChunkNum = fileSize / chunkSize
         val position = hasChunkNum * chunkSize
         var index = hasChunkNum + 1
+        Log.d(Common.MY_TAG, "文件覆盖追加 index $index")
         //先覆盖残缺分片
         withContext(Dispatchers.IO) {
             RandomAccessFile(file, "rw").use {
@@ -206,7 +211,7 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
                     index++
                 }
                 Log.d(Common.MY_TAG, "文件下载写入完成")
-                database.downloadFileDao().updateFileStatus(id, 1)
+                database.downloadFileDao().delById(id)
                 downloadFiles.value = database.downloadFileDao().findDownloadFile()
             }
         }

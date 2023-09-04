@@ -85,37 +85,37 @@ fun FileScreen() {
 }
 
 
-@Composable
-fun Test2() {
-    val context = LocalContext.current
-    val privateDir = context.getExternalFilesDir(null)
-    val globalViewModel = GlobalViewModel.getInstance(null);
-    val player = ExoPlayer.Builder(context).build()
-    val mediaItem =
-        MediaItem.fromUri(Uri.fromFile(File(File(privateDir, "my_file"), "my_file.mp4")))
-    Column() {
-        AndroidView(
-            factory = {
-                PlayerView(it).apply {
-                    useController = true
-                    this.player = player
-                }
-            }, modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp)
-        )
-        Button(onClick = {
-            if (privateDir != null) {
-                globalViewModel.test(privateDir)
-                player.setMediaItem(mediaItem)
-                player.pause()
-                player.play()
-            }
-        }) {
-            Text(text = "测试")
-        }
-    }
-}
+//@Composable
+//fun Test2() {
+//    val context = LocalContext.current
+//    val privateDir = context.getExternalFilesDir(null)
+//    val globalViewModel = GlobalViewModel.getInstance(null);
+//    val player = ExoPlayer.Builder(context).build()
+//    val mediaItem =
+//        MediaItem.fromUri(Uri.fromFile(File(File(privateDir, "my_file"), "my_file.mp4")))
+//    Column() {
+//        AndroidView(
+//            factory = {
+//                PlayerView(it).apply {
+//                    useController = true
+//                    this.player = player
+//                }
+//            }, modifier = Modifier
+//                .fillMaxWidth()
+//                .height(400.dp)
+//        )
+//        Button(onClick = {
+//            if (privateDir != null) {
+//                globalViewModel.test(privateDir)
+//                player.setMediaItem(mediaItem)
+//                player.pause()
+//                player.play()
+//            }
+//        }) {
+//            Text(text = "测试")
+//        }
+//    }
+//}
 
 
 @Composable

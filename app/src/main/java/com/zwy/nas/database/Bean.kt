@@ -31,6 +31,7 @@ data class UploadFileBean(
 
 @Entity(tableName = "download_file")
 data class DownloadFileBean(
+    @PrimaryKey
     val id: String,
     val name: String,
     val size: Long,

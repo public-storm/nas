@@ -21,8 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
 
 class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     private val _navigateToLogin = mutableStateOf(false)
@@ -56,45 +54,6 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
 
     val files = MutableStateFlow<List<SelectFileResponse>>(emptyList())
 
-    fun test(dir: File) {
-        if (!bol) {
-            bol = true
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    var index = 1L
-                    val fileName = "my_file.mp4"
-                    val dirName = File(dir, "my_file")
-                    if (!dirName.exists()) {
-                        Log.d(Common.MY_TAG, "CreateDir: 创建目录")
-                        dirName.mkdirs()
-                    } else {
-                        Log.d(Common.MY_TAG, "CreateDir: 目录已经创建")
-                    }
-                    val file = File(dirName, fileName)
-                    val res = Api.get(findToken(database)).findChunkSize()
-                    if (res.code == "200") {
-                        FileOutputStream(file).use {
-                            while (true) {
-                                val r = Api.get(findToken(database)).filePlay(index)
-                                val data = r.bytes()
-                                val chunkSize = res.data
-                                it.write(data)
-                                val p = findProgress(index.toInt(), chunkSize?.toInt()!!)
-                                Log.d(Common.MY_TAG, "文件写入 $index  $p")
-                                if (index == chunkSize) {
-                                    break
-                                }
-                                index++
-                            }
-                        }
-                        Log.d(Common.MY_TAG, "写入完成")
-                    }
-                } catch (e: Exception) {
-                    Log.e(Common.MY_TAG, "下载分片异常", e)
-                }
-            }
-        }
-    }
 
 
     companion object {
@@ -264,7 +223,8 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
             selectFileResponse.name,
             selectFileResponse.size,
             0,
-            selectFileResponse.file
+            selectFileResponse.file,
+            0
         )
     }
 

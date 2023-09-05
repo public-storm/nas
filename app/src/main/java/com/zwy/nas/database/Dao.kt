@@ -8,7 +8,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.Update
 
 @Dao
 interface UserDao {
@@ -77,7 +76,7 @@ interface DownloadFileDao {
     suspend fun insertDownloadFile(downloadFileBean: DownloadFileBean)
 
     @Query("select * from download_file")
-    suspend fun findDownloadFile(): List<DownloadFileBean>
+    suspend fun findAll(): List<DownloadFileBean>
 
     @Query("select * from download_file where status=:status")
     fun findByStatusSync(status: Int): List<DownloadFileBean>
@@ -90,10 +89,32 @@ interface DownloadFileDao {
 
     @Query("delete from download_file where id=:id")
     suspend fun delById(id: String)
+
+    @Query("select * from download_file where id = :id")
+    suspend fun findById(id: String): DownloadFileBean
+}
+
+@Dao
+interface DownloadFileHistoryDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(downloadFileBean: DownloadHistoryFileBean)
+
+    @Query("select * from download_file_history")
+    suspend fun findAll(): List<DownloadHistoryFileBean>
+
+    @Query("select * from download_file_history where id =:id")
+    suspend fun findById(id: String): DownloadHistoryFileBean
+
+    @Query("delete from download_file_history where id =:id")
+    suspend fun delById(id: String)
 }
 
 @Database(
-    entities = [UserBean::class, TokenBean::class, UploadFileBean::class, DownloadFileBean::class],
+    entities = [UserBean::class,
+        TokenBean::class,
+        UploadFileBean::class,
+        DownloadFileBean::class,
+        DownloadHistoryFileBean::class],
     version = 1,
     exportSchema = false
 )
@@ -102,6 +123,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun tokenDao(): TokenDao
     abstract fun uploadFileDao(): UploadFileDao
     abstract fun downloadFileDao(): DownloadFileDao
+    abstract fun downloadFileHistoryDao(): DownloadFileHistoryDao
 }
 
 object DatabaseHolder {

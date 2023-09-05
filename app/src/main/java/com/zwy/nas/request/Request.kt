@@ -19,8 +19,8 @@ import retrofit2.http.Part
 import retrofit2.http.Query
 
 //const val reqPath = "192.168.0.3:8777"
-const val reqPath = "192.168.0.2:8777"
-//const val reqPath = "10.23.100.186:8777"
+//const val reqPath = "192.168.0.2:8777"
+const val reqPath = "10.23.100.186:8777"
 //const val reqPath= "192.168.43.6:8777"
 //const val reqPath= "192.168.137.1:8777"
 //const val reqPath = "192.168.110.103:8777"

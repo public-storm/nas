@@ -40,3 +40,12 @@ data class DownloadFileBean(
     val progress: Int
 )
 
+@Entity(tableName = "download_file_history")
+data class DownloadHistoryFileBean(
+    @PrimaryKey
+    val id: String,
+    val name: String,
+    val size: Long,
+    val type: Int,
+)
+

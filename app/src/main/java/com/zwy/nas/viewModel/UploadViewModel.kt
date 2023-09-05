@@ -198,20 +198,20 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
                 singleUpload(uploadFileBean, it, id, superId)
             }
         } else {
-            createWebSocket(userId,superId)
+            createWebSocket(userId)
             contentResolver?.openInputStream(uri)?.use {
                 upload(uploadFileBean, it, chunks, id, userId, superId)
             }
         }
     }
 
-    private fun createWebSocket(userId: String, superId: String) {
+    private fun createWebSocket(userId: String) {
         Log.d(Common.MY_TAG, "创建webSocket连接 $userId")
         val webSocketUrl = "ws://$reqPath/webSocket/${userId}"
         val webSocketListener = object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 findLocalUploadFile()
-                findServerFiles(superId)
+                findServerFiles()
             }
         }
         WebSocketClient.connect(webSocketUrl, webSocketListener)
@@ -248,7 +248,7 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
             val res = Api.get(findToken(database))
                 .upload(filenameRequestBody, superIdRequestBody, idRequestBody, filePart)
             if (res.code == "200") {
-                findServerFiles(superId)
+                findServerFiles()
                 delLocalUploadFile(uploadFileBean.id)
             } else {
                 Log.w(Common.MY_TAG, "单文件上传失败 $res")
@@ -258,7 +258,7 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
-    private fun findServerFiles(superId: String) {
+    private fun findServerFiles() {
         if (globalViewModel == null) {
             globalViewModel = GlobalViewModel.getInstance(null)
         }
@@ -326,11 +326,11 @@ class UploadViewModel(private val database: AppDatabase) : ViewModel() {
                 chunkNumber++
             }
             if (database.uploadFileDao().findById(uploadFileBean.id).status == 0) {
-                createWebSocket(userId,superId)
+                createWebSocket(userId)
                 delLocalUploadFile(uploadFileBean.id)
             }
         } catch (jobE: CancellationException) {
-            Log.d(Common.MY_TAG, "任务取消")
+            Log.d(Common.MY_TAG, "上传任务取消")
         } catch (e: Exception) {
             Log.e(Common.MY_TAG, "分片文件上传异常", e)
         }

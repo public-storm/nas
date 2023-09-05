@@ -55,7 +55,6 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
     val files = MutableStateFlow<List<SelectFileResponse>>(emptyList())
 
 
-
     companion object {
         private var instance: GlobalViewModel? = null
 
@@ -227,6 +226,7 @@ class GlobalViewModel(private val database: AppDatabase) : ViewModel() {
             0
         )
     }
+
 
     private fun findProgress(numerator: Int, denominator: Int): Int {
         // 将 Int 转换为 Double，然后计算百分比

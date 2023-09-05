@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddTask
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
@@ -218,7 +222,9 @@ fun ListBox() {
     val globalViewModel = GlobalViewModel.getInstance(null)
     val downloadViewModel = DownloadViewModel.getInstance(null)
     val files by globalViewModel.files.collectAsState()
+    val localFile by downloadViewModel.downloadFileHistory.collectAsState()
     globalViewModel.findServerFiles()
+    downloadViewModel.findDownloadFileHistory()
     var openAddBtnDialog by remember { mutableStateOf(false) }
     var openRenameDialog by remember { mutableStateOf(false) }
     var openDelDialog by remember { mutableStateOf(false) }
@@ -262,24 +268,47 @@ fun ListBox() {
                         )
                     },
                     trailingContent = {
-                        FilesTrailing(
-                            expanded = expanded,
-                            onClick = {
-                                expanded = true
-                                globalViewModel.optFileIndex = it
-                            },
-                            infoClick = {
-                                openFileInfo = true
-                            },
-                            onDismissRequest = {
-                                expanded = false
-                            },
-                            delClick = { openDelDialog = true },
-                            download = {
-                                val downloadFileBean = globalViewModel.findDownloadFileBean(it)
-                                downloadViewModel.addDownloadTask(downloadFileBean)
-                            }) {
-                            openRenameDialog = true
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val type = files[it].file
+                            val id = files[it].id
+                            var hasLocal = false
+                            if (type != 0) {
+                                localFile.forEach {
+                                    if (it.id == id) {
+                                        hasLocal = true
+                                    }
+                                }
+                            }
+                            if (hasLocal) {
+                                Icon(
+                                    Icons.Default.AddTask,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                            FilesTrailing(
+                                hasLocal = hasLocal,
+                                expanded = expanded,
+                                onClick = {
+                                    expanded = true
+                                    globalViewModel.optFileIndex = it
+                                },
+                                infoClick = {
+                                    openFileInfo = true
+                                },
+                                onDismissRequest = {
+                                    expanded = false
+                                },
+                                delClick = { openDelDialog = true },
+                                delLocalClick = {
+                                    downloadViewModel.delLocalFile(files[it].id)
+                                },
+                                download = {
+                                    val downloadFileBean = globalViewModel.findDownloadFileBean(it)
+                                    downloadViewModel.addDownloadTask(downloadFileBean)
+                                }) {
+                                openRenameDialog = true
+                            }
                         }
                     },
                 )
@@ -314,11 +343,13 @@ fun ListBox() {
 
 @Composable
 fun FilesTrailing(
+    hasLocal: Boolean,
     expanded: Boolean,
     onClick: () -> Unit,
     onDismissRequest: () -> Unit,
     infoClick: () -> Unit,
     delClick: () -> Unit,
+    delLocalClick: () -> Unit,
     download: () -> Unit,
     rNameClick: () -> Unit
 ) {
@@ -358,6 +389,20 @@ fun FilesTrailing(
                         contentDescription = null
                     )
                 })
+            if (hasLocal) {
+                DropdownMenuItem(
+                    text = { Text("删除本地文件") },
+                    onClick = {
+                        onDismissRequest()
+                        delLocalClick()
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = null
+                        )
+                    })
+            }
             DropdownMenuItem(
                 text = { Text("下载") },
                 onClick = {

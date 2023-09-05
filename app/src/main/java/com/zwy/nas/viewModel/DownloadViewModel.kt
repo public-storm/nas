@@ -45,7 +45,6 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
     private var job: Job? = null
     private var dir: File? = null
     private var optId: String = ""
-    private var file: File? = null
 
     fun addDir(dir: File) {
         if (this.dir == null) {
@@ -131,10 +130,10 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
                 Log.d(Common.MY_TAG, "文件下载 目录创建 $dirName")
                 dirFile.mkdir()
             }
-            file = File(dirFile, downloadFileBean.name)
-            if (!file!!.exists()) {
+            val file = File(dirFile, downloadFileBean.name)
+            if (!file.exists()) {
                 withContext(Dispatchers.IO) {
-                    file!!.createNewFile()
+                    file.createNewFile()
                 }
             }
             val id = downloadFileBean.id
@@ -142,7 +141,7 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
             if (findChunkRes.code == "200") {
                 val chunkSize = findChunkRes.data!!.chunkSize
                 val chunkTotal = findChunkRes.data!!.chunkTotal
-                val fileSize = file!!.length()
+                val fileSize = file.length()
                 Log.d(
                     Common.MY_TAG,
                     "downloadFile: 文件大小 $fileSize 分片大小 $chunkSize 判断值 ${fileSize % chunkSize == 0L}"
@@ -151,11 +150,11 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
                 if (fileSize % chunkSize == 0L) {
                     //文件追加
                     Log.d(Common.MY_TAG, "文件追加 ${downloadFileBean.name}")
-                    appendToFile(chunkTotal, chunkSize, downloadFileBean.id)
+                    appendToFile(file, chunkTotal, chunkSize, downloadFileBean.id)
                 } else {
                     //文件覆盖
                     Log.d(Common.MY_TAG, "文件覆盖追加 ${downloadFileBean.name}")
-                    writeToPosition(chunkTotal, chunkSize, downloadFileBean.id)
+                    writeToPosition(file, chunkTotal, chunkSize, downloadFileBean.id)
                 }
             } else {
                 Log.w(Common.MY_TAG, "文件下载 查询分片数失败")
@@ -171,14 +170,15 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
     文件下载（追加）
      */
     private suspend fun appendToFile(
+        file: File,
         chunkTotal: Long,
         chunkSize: Long,
         id: String
     ) {
-        val fileSize = file!!.length()
+        val fileSize = file.length()
         val index = if (fileSize > 0) (fileSize / chunkSize) + 1 else 1L
         Log.d(Common.MY_TAG, "文件追加 index $index")
-        writeFile(id, index, chunkTotal)
+        writeFile(file, id, index, chunkTotal)
     }
 
 
@@ -186,11 +186,12 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
     文件下载（先覆盖残缺分片，再追加分片数据）
      */
     private suspend fun writeToPosition(
+        file: File,
         chunkTotal: Long,
         chunkSize: Long,
         id: String
     ) {
-        val fileSize = file!!.length()
+        val fileSize = file.length()
         val hasChunkNum = fileSize / chunkSize
         val position = hasChunkNum * chunkSize
         var index = hasChunkNum + 1
@@ -204,22 +205,25 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
                 index++
             }
         }
-        writeFile(id, index, chunkTotal)
+        writeFile(file, id, index, chunkTotal)
     }
 
     /*
     文件下载（分片数据追加）
      */
-    private suspend fun writeFile( id: String, chunkIndex: Long, chunkTotal: Long) {
+    private suspend fun writeFile(file: File, id: String, chunkIndex: Long, chunkTotal: Long) {
         var index = chunkIndex
         withContext(Dispatchers.IO) {
-            FileOutputStream(file).use {
+            FileOutputStream(file, true).use {
                 while (true) {
                     val dataRes = Api.get(findToken(database)).download(id, index)
-                    Log.d(Common.MY_TAG, "index $index 文件写入前大小 ${file!!.length()}")
+                    Log.d(Common.MY_TAG, "index $index 文件写入前大小 ${file.length()}")
                     it.write(dataRes.bytes())
                     val p = findProgress(index.toInt(), chunkTotal.toInt())
-                    Log.d(Common.MY_TAG, "index $index 文件分片写入 $p% 文件大小 ${file!!.length()}")
+                    Log.d(
+                        Common.MY_TAG,
+                        "index $index 文件分片写入 $p% 文件大小 ${file.length()}"
+                    )
                     progress.value = p
                     if (index == chunkTotal) {
                         break

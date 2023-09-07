@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +41,9 @@ import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -86,40 +91,88 @@ import java.io.File
 fun FileScreen() {
     PathRow()
     ListBox()
+//    Test2()
+//    CardListPreview()
+}
+
+data class CardItem(val id: Int, val title: String)
+
+@Composable
+fun CardListPreview() {
+    val cardItems = List(6) { index ->
+        CardItem(index, "Card $index")
+    }
+    CardList(cards = cardItems)
+}
+
+@Composable
+fun CardList(cards: List<CardItem>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        val chunkList = cards.chunked(2)
+        items(chunkList.size) { index ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                for (cardItem in chunkList[index]) {
+                    Card(
+                        modifier = Modifier
+                            .width(150.dp)
+                            .height(200.dp)
+                            .padding(8.dp),
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+//                            AsyncImage(
+//                                model = "https://example.com/image.jpg",
+//                                contentDescription = null
+//                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 
-//@Composable
-//fun Test2() {
-//    val context = LocalContext.current
-//    val privateDir = context.getExternalFilesDir(null)
-//    val globalViewModel = GlobalViewModel.getInstance(null);
-//    val player = ExoPlayer.Builder(context).build()
-//    val mediaItem =
-//        MediaItem.fromUri(Uri.fromFile(File(File(privateDir, "my_file"), "my_file.mp4")))
-//    Column() {
-//        AndroidView(
-//            factory = {
-//                PlayerView(it).apply {
-//                    useController = true
-//                    this.player = player
-//                }
-//            }, modifier = Modifier
-//                .fillMaxWidth()
-//                .height(400.dp)
-//        )
-//        Button(onClick = {
-//            if (privateDir != null) {
-//                globalViewModel.test(privateDir)
-//                player.setMediaItem(mediaItem)
-//                player.pause()
-//                player.play()
-//            }
-//        }) {
-//            Text(text = "测试")
-//        }
-//    }
-//}
+@Composable
+fun Test2() {
+    val context = LocalContext.current
+    val player = ExoPlayer.Builder(context).build()
+    val downloadViewModel = DownloadViewModel.getInstance(null)
+    Column() {
+        AndroidView(
+            factory = {
+                PlayerView(it).apply {
+                    useController = true
+                    this.player = player
+                }
+            }, modifier = Modifier
+                .fillMaxWidth()
+                .height(400.dp)
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(all = 10.dp)
+        ) {
+            Button(onClick = {
+                downloadViewModel.test(context.cacheDir, player)
+            }) {
+                Text(text = "开始")
+            }
+            Button(onClick = { player.stop() }) {
+                Text(text = "结束")
+            }
+        }
+
+    }
+}
 
 
 @Composable

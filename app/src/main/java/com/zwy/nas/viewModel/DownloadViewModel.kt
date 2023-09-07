@@ -1,9 +1,12 @@
 package com.zwy.nas.viewModel
 
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
 import com.zwy.nas.Common
 import com.zwy.nas.database.AppDatabase
 import com.zwy.nas.database.DownloadFileBean
@@ -17,6 +20,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import okhttp3.ResponseBody
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
@@ -306,4 +313,27 @@ class DownloadViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
+    fun test(dir: File, player: ExoPlayer) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val mediaItemList = mutableListOf<MediaItem>()
+            for (i in 0..4) {
+                val file = File(dir, "${i}.mp4")
+                val call = Api.get(findToken(database)).preview(i)
+                val response = withContext(Dispatchers.IO) { call.execute() }
+                if (response.isSuccessful) {
+                    val bt = response.body()?.bytes()
+                    file.outputStream().use {
+                        Log.d(Common.MY_TAG, "预览文件下载回调 文件开始下载")
+                        it.write(bt)
+                    }
+                    mediaItemList.add(MediaItem.fromUri(Uri.fromFile(file)))
+                }
+            }
+            withContext(Dispatchers.Main) {
+                player.setMediaItems(mediaItemList)
+                player.pause()
+                player.play()
+            }
+        }
+    }
 }

@@ -12,9 +12,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -86,12 +90,22 @@ fun HomeScreen() {
                     }
 
                     1 -> {
-                        //文件上传
-                        UploadScreen()
+                        //电影
+                        MovieScreen()
                     }
 
                     2 -> {
-                        //文件下载
+                        //电视剧
+                        TvScreen()
+                    }
+
+                    3 -> {
+                        //上传
+                        UploadScreen()
+                    }
+
+                    4 -> {
+                        //下载
                         DownloadScreen()
                     }
                 }
@@ -129,10 +143,12 @@ data class DrawerItem(val imageVector: ImageVector, val name: String)
  */
 fun findDrawerItems(): List<DrawerItem> {
     return listOf(
-        DrawerItem(Icons.Default.Home, "主页"),
+        DrawerItem(Icons.Default.Folder, "文件"),
+        DrawerItem(Icons.Default.Theaters, "电影"),
+        DrawerItem(Icons.Default.LiveTv, "电视剧"),
         DrawerItem(Icons.Default.ArrowUpward, "上传"),
         DrawerItem(Icons.Default.ArrowDownward, "下载"),
-        DrawerItem(Icons.Default.Favorite, "收藏"),
+        DrawerItem(Icons.Default.Style, "标签"),
     )
 }
 

@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.RequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody
+import retrofit2.Call
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
@@ -17,6 +18,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 //const val reqPath = "192.168.0.3:8777"
 //const val reqPath = "192.168.0.2:8777"
@@ -40,24 +42,24 @@ interface IApi {
     @POST("/login")
     suspend fun login(@Body loginRequest: LoginRequest): ResponseResult<String>
 
-    @POST("/directory")
+    @POST("/file/directory")
     suspend fun createDirectory(@Body req: CreateDirectoryRequest): ResponseResult<Unit>
 
-    @GET("/directory")
+    @GET("/file/directory")
     suspend fun findFiles(
         @Query("superId") superId: String
     ): ResponseResult<List<SelectFileResponse>>
 
-    @DELETE("/directory")
+    @DELETE("/file/directory")
     suspend fun delDirectory(@Query("id") id: String): ResponseResult<Unit>
 
-    @PUT("/rename")
+    @PUT("/file/rename")
     suspend fun renameFile(
         @Query("id") id: String,
         @Query("name") name: String
     ): ResponseResult<Unit>
 
-    @GET("/upload")
+    @GET("/file/upload")
     suspend fun checkUpload(
         @Query("filename") filename: String,
         @Query("superId") superId: String,
@@ -65,7 +67,7 @@ interface IApi {
     ): ResponseResult<CheckExistsResponse>
 
     @Multipart
-    @POST("/upload")
+    @POST("/file/upload")
     suspend fun upload(
         @Part("filename") filename: RequestBody,
         @Part("superId") superId: RequestBody,
@@ -74,7 +76,7 @@ interface IApi {
     ): ResponseResult<Unit>
 
     @Multipart
-    @POST("/upload/split")
+    @POST("/file/upload/split")
     suspend fun uploadSplit(
         @Part("chunkNumber") chunkNumber: RequestBody,
         @Part("totalSize") totalSize: RequestBody,
@@ -86,18 +88,24 @@ interface IApi {
         @Part file: MultipartBody.Part
     ): ResponseResult<Unit>
 
-    @GET("/history")
+    @GET("/file/history")
     suspend fun findHistoryFile(): ResponseResult<List<FindHistoryFileResponse>>
 
-    @DELETE("/history")
+    @DELETE("/file/history")
     suspend fun delAllHistoryFile(): ResponseResult<Unit>
 
-    @GET("/download/chunk")
+    @GET("/file/download/chunk")
     suspend fun findDownloadChunk(@Query("id") id: String): ResponseResult<FindDownloadChunkResponse>
 
-    @GET("/download")
-    suspend fun download(@Query("id")id: String,@Query("index") index: Long): ResponseBody
+    @GET("/file/download")
+    suspend fun download(@Query("id") id: String, @Query("index") index: Long): ResponseBody
+
+    @Streaming
+    @GET("/preview")
+    fun preview(@Query("index") index: Int): Call<ResponseBody>
 }
+
+
 
 class HeaderInterceptor(private val token: String) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {

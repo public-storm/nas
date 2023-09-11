@@ -78,6 +78,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.zwy.nas.Common
+import com.zwy.nas.request.reqPath
 import com.zwy.nas.util.FileUtil
 import com.zwy.nas.viewModel.DownloadViewModel
 import com.zwy.nas.viewModel.GlobalViewModel
@@ -89,10 +90,33 @@ import java.io.File
  */
 @Composable
 fun FileScreen() {
-    PathRow()
-    ListBox()
+//    PathRow()
+//    ListBox()
 //    Test2()
 //    CardListPreview()
+    Test5()
+}
+
+@Composable
+fun Test5() {
+// Create a player instance.
+    val context = LocalContext.current
+    val player = ExoPlayer.Builder(context).build()
+// Set the media item to be played.
+    player.setMediaItem(MediaItem.fromUri("http://${reqPath}/file/hls/list.m3u8"))
+// Prepare the player.
+    player.prepare()
+    player.play()
+    AndroidView(
+        factory = {
+            PlayerView(it).apply {
+                useController = true
+                this.player = player
+            }
+        }, modifier = Modifier
+            .fillMaxWidth()
+            .height(400.dp)
+    )
 }
 
 data class CardItem(val id: Int, val title: String)

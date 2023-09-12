@@ -99,12 +99,9 @@ fun FileScreen() {
 
 @Composable
 fun Test5() {
-// Create a player instance.
     val context = LocalContext.current
     val player = ExoPlayer.Builder(context).build()
-// Set the media item to be played.
-    player.setMediaItem(MediaItem.fromUri("http://${reqPath}/file/hls/list.m3u8"))
-// Prepare the player.
+    player.setMediaItem(MediaItem.fromUri("http://${reqPath}/file/hls/playlist.m3u8"))
     player.prepare()
     player.play()
     AndroidView(

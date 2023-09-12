@@ -59,7 +59,7 @@ interface IApi {
         @Query("name") name: String
     ): ResponseResult<Unit>
 
-    @GET("/file/upload")
+    @GET("/file/upload/check")
     suspend fun checkUpload(
         @Query("filename") filename: String,
         @Query("superId") superId: String,
@@ -104,7 +104,6 @@ interface IApi {
     @GET("/preview")
     fun preview(@Query("index") index: Int): Call<ResponseBody>
 }
-
 
 
 class HeaderInterceptor(private val token: String) : Interceptor {
